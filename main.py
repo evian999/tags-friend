@@ -1,22 +1,17 @@
 import os
-import glob
 from pathlib import Path
-import torch
+import glob
 from PIL import Image
 import gradio as gr
-from transformers import AutoProcessor, MllamaForConditionalGeneration
-import json
+
+from model_utils import process_image
+from file_utils import save_caption, list_folders, json_folder_process
 
 # 设置环境变量
 os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 # 设置本文件所在文件夹为工作文件夹 (防止gradio找不到文件)
 os.chdir(Path(__file__).parent)
 current_path = os.path.dirname(os.path.abspath(__file__))
-
-
-# 全局变量存储模型和处理器
-model = None
-processor = None
 
 # 在文件开头添加自定义样式
 custom_css = """
@@ -25,53 +20,6 @@ custom_css = """
     background: transparent !important;
 }
 """
-
-def load_model():
-    """加载模型和处理器"""
-    global model, processor
-    if model is None or processor is None:
-        print("正在加载模型...")
-        model_dir = "./model/llama3.2-vision-11b"
-        model = MllamaForConditionalGeneration.from_pretrained(
-            model_dir,
-            device_map="auto",
-            torch_dtype=torch.bfloat16,
-            low_cpu_mem_usage=True
-        )
-        processor = AutoProcessor.from_pretrained(model_dir)
-        print("模型加载完成！")
-
-def process_image(image, task_type, user_prompt):
-    """处理单张图片"""
-    try:
-        # 确保模型已加载
-        load_model()
-        
-        # 根据任务类型构建 message
-        if task_type == "caption":
-            message = [
-                {"role": "user", "content": [
-                    {'type': 'image'},
-                    {'type': 'text', 'text': user_prompt}
-                ]}
-            ]
-        else:  # tag
-            message = [
-                {"role": "user", "content": [
-                    {'type': 'image'},
-                    {'type': 'text', 'text': user_prompt}
-                ]}
-            ]
-
-        input_text = processor.apply_chat_template(message, add_generation_prompt=True)
-        inputs = processor(images=image, text=input_text, return_tensors="pt").to("cuda")
-        output = model.generate(**inputs, max_new_tokens=30)
-        response = processor.decode(output[0], skip_special_tokens=True)
-        
-        return response.splitlines()[-1]
-        
-    except Exception as e:
-        return f"处理出错: {str(e)}"
 
 def save_caption(img_path, caption):
     """保存 caption 到同名的 .caption 文件"""
