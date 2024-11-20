@@ -3,13 +3,14 @@ from pathlib import Path
 import glob
 from PIL import Image
 import gradio as gr
+import json
 
-from model_utils import process_image
-from file_utils import save_caption, list_folders, json_folder_process
+from model_utils import process_image, list_models
+from file_utils import list_folders, json_folder_process, update_folder_path, process_folder
 
 # 设置环境变量
 os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
-# 设置本文件所在文件夹为工作文件夹 (防止gradio找不到文件)
+# 设置本文件所在文件夹为工作文件夹
 os.chdir(Path(__file__).parent)
 current_path = os.path.dirname(os.path.abspath(__file__))
 
@@ -52,8 +53,6 @@ def process_folder(folder_path, task_type, user_prompt):
     """处理文件夹中的所有图片"""
     try:
         # 确保模型已加载
-        load_model()
-        
         if not folder_path:
             return "请选择文件夹"
         
@@ -155,7 +154,14 @@ with gr.Blocks(css=custom_css) as demo:
         with gr.TabItem("单张图片处理"):
             with gr.Row():
                 # 左侧列：提示词和输出结果
-                with gr.Column(scale=6):
+                with gr.Column(scale=4):
+                    model_path = gr.Dropdown(
+                        choices=list_models(),
+                        value="llama3.2-vision",
+                        label="模型选择",
+                        interactive=True
+                    )
+                    
                     task_type = gr.Radio(
                         choices=["caption", "tag"],
                         value="caption",
@@ -180,21 +186,28 @@ with gr.Blocks(css=custom_css) as demo:
                 # 右侧列：图片上传
                 with gr.Column(scale=4):
                     image_input = gr.Image(
-                        type="pil",
+                        type="filepath",
                         label="上传图片",
                         height=400
                     )
+                
+                single_button.click(
+                    fn=process_image,
+                    inputs=[image_input, model_path, task_type, single_prompt],
+                    outputs=single_output
+                )
+            
         
         # 文件夹处理标签页
         with gr.TabItem("文件夹处理"):
             with gr.Row():
                 # 左侧列：控制区域
-                with gr.Column(scale=4):
+                with gr.Column(scale=6):
                     # 路径选择
                     with gr.Group():
                         with gr.Row():
                             folder_input = gr.Dropdown(
-                                choices=list_folders(),
+                                choices=list_folders(current_path),
                                 value=current_path,
                                 label="图片文件夹路径",
                                 # allow_custom_value=True,
@@ -261,11 +274,11 @@ with gr.Blocks(css=custom_css) as demo:
         with gr.TabItem("JSONL文件处理"):
             with gr.Row():
                 # left side: input
-                with gr.Column(scale=3):
+                with gr.Column(scale=4):
                     with gr.Group():
                         with gr.Row():
                             jsonl_input = gr.Dropdown(
-                                choices = list_folders(),
+                                choices = list_folders(current_path),
                                 value=current_path,
                                 label="Caption文件夹路径",
                                 allow_custom_value=True,
